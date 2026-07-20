@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>M3U8影视库</title>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;-webkit-tap-highlight-color:transparent;}
+body{background:#0f172a;color:#f1f5f9;padding-bottom:30px;}
+/*顶部导航栏*/
+.header{position:sticky;top:0;background:#1e293b;padding:16px 20px;z-index:99;box-shadow:0 2px 12px rgba(0,0,0,0.3);}
+.header-title{font-size:20px;font-weight:600;color:#38bdf8;text-align:center;}
+/*标签栏 全部/收藏/历史*/
+.tab-wrap{display:flex;padding:12px 20px;gap:12px;overflow-x:auto;}
+.tab-item{flex:0 0 auto;padding:8px 20px;border-radius:20px;font-size:15px;background:#1e293b;color:#cbd5e1;cursor:pointer;}
+.tab-item.active{background:#38bdf8;color:#0f172a;font-weight:500;}
+/*搜索框*/
+.search-wrap{padding:0 20px 16px;}
+.search-input{width:100%;padding:14px 16px;background:#1e293b;border:1px solid #334155;border-radius:12px;color:#f1f5f9;font-size:15px;outline:none;}
+.search-input::placeholder{color:#94a3b8;}
+.search-input:focus{border-color:#38bdf8;}
+/*播放器区域*/
+.player-wrap{margin:0 20px 20px;border-radius:12px;overflow:hidden;background:#000;display:none;}
+#video-player{width:100%;display:block;}
+.player-tip{text-align:center;color:#94a3b8;font-size:13px;padding:8px 0;margin-top:8px;}
+/*网格列表布局 2列精致卡片*/
+.list-wrap{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;padding:0 20px;}
+.video-card{background:#1e293b;border-radius:12px;padding:14px;position:relative;cursor:pointer;transition:all 0.2s ease;}
+.video-card:active{transform:scale(0.97);background:#334155;}
+.card-name{font-size:15px;color:#e2e8f0;line-height:1.5;word-break:break-all;}
+/*收藏星星图标*/
+.star-icon{position:absolute;right:12px;top:12px;font-size:16px;color:#fbbf24;}
+/*长按弹出菜单*/
+.operate-menu{position:absolute;z-index:999;background:#1e293b;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,0.4);overflow:hidden;display:none;width:130px;top:100%;left:0;margin-top:8px;}
+.menu-option{padding:12px 16px;font-size:14px;color:#e2e8f0;border-bottom:1px solid #334155;}
+.menu-option:last-child{border-bottom:none;}
+/*无数据提示*/
+.empty-box{grid-column:1/-1;text-align:center;padding:60px 0;color:#94a3b8;font-size:15px;}
+</style>
+</head>
+<body>
+
+<!--顶部标题栏-->
+<div class="header">
+    <div class="header-title">M3U8高清影视库</div>
+</div>
+
+<!--分类标签-->
+<div class="tab-wrap">
+    <div class="tab-item active" data-tab="all">全部影片</div>
+    <div class="tab-item" data-tab="star">我的收藏</div>
+    <div class="tab-item" data-tab="history">播放历史</div>
+</div>
+
+<!--搜索框-->
+<div class="search-wrap">
+    <input type="text" class="search-input" placeholder="输入影片名称搜索...">
+</div>
+
+<!--播放器-->
+<div class="player-wrap" id="playerBox">
+    <video id="video-player" controls autoplay preload="auto" playsinline></video>
+    <div class="player-tip">HLS极速流媒体内核 · 弱网自动缓冲</div>
+</div>
+
+<!--影片列表-->
+<div class="empty-box" id="emptyTip">暂无匹配影片</div>
+<div class="list-wrap" id="listBox"></div>
+
+<script>
+//持久化数据 localStorage永久保存
+let playHistory = JSON.parse(localStorage.getItem('playHistory')) || [];
+let starList = JSON.parse(localStorage.getItem('starList')) || [];
+let currentTab = 'all';
+let hls = null;
+
+//100条影视资源
+const videoData = [
+{name:"玩乳夹肛塞输液",url:"https://hm-img.twmjjy.com/videos/202607/12/336973478/index.m3u8"},
+{name:"影片002",url:"https://xxx2.m3u8"},
+{name:"影片003",url:"https://xxx3.m3u8"},
+{name:"影片004",uRl:"https://xxx4.m3u8"},
+{name:"影片005",uRl:"https://xxx5.m3u8"},
+{name:"影片006",uRl:"https://xxx6.m3u8"},
+{name:"影片007",uRl:"https://xxx7.m3u8"},
+{name:"影片008",uRl:"https://xxx8.m3u8"},
+{name:"影片009",uRl:"https://xxx9.m3u8"},
+{name:"影片010",uRl:"https://xxx10.m3u8"},
+{name:"影片011",uRl:"https://xxx11.m3u8"},
+{name:"影片012",uRl:"https://xxx12.m3u8"},
+{name:"影片013",uRl:"https://xxx13.m3u8"},
+{name:"影片014",uRl:"https://xxx14.m3u8"},
+{name:"影片015",uRl:"https://xxx15.m3u8"},
+{name:"影片016",uRl:"https://xxx16.m3u8"},
+{name:"影片017",uRl:"https://xxx17.m3u8"},
+{name:"影片018",uRl:"https://xxx18.m3u8"},
+{name:"影片019",uRl:"https://xxx19.m3u8"},
+{name:"影片020",uRl:"https://xxx20.m3u8"},
+{name:"影片021",uRl:"https://xxx21.m3u8"},
+{name:"影片022",uRl:"https://xxx22.m3u8"},
+{name:"影片023",uRl:"https://xxx23.m3u8"},
+{name:"影片024",uRl:"https://xxx24.m3u8"},
+{name:"影片025",uRl:"https://xxx25.m3u8"},
+{name:"影片026",uRl:"https://xxx26.m3u8"},
+{name:"影片027",uRl:"https://xxx27.m3u8"},
+{name:"影片028",uRl:"https://xxx28.m3u8"},
+{name:"影片029",uRl:"https://xxx29.m3u8"},
+{name:"影片030",uRl:"https://xxx30.m3u8"},
+{name:"影片031",uRl:"https://xxx31.m3u8"},
+{name:"影片032",uRl:"https://xxx32.m3u8"},
+{name:"影片033",uRl:"https://xxx33.m3u8"},
+{name:"影片034",uRl:"https://xxx34.m3u8"},
+{name:"影片035",uRl:"https://xxx35.m3u8"},
+{name:"影片036",uRl:"https://xxx36.m3u8"},
+{name:"影片037",uRl:"https://xxx37.m3u8"},
+{name:"影片038",uRl:"https://xxx38.m3u8"},
+{name:"影片039",uRl:"https://xxx39.m3u8"},
+{name:"影片040",uRl:"https://xxx40.m3u8"},
+{name:"影片041",uRl:"https://xxx41.m3u8"},
+{name:"影片042",uRl:"https://xxx42.m3u8"},
+{name:"影片043",uRl:"https://xxx43.m3u8"},
+{name:"影片044",uRl:"https://xxx44.m3u8"},
+{name:"影片045",uRl:"https://xxx45.m3u8"},
+{name:"影片046",uRl:"https://xxx46.m3u8"},
+{name:"影片047",uRl:"https://xxx47.m3u8"},
+{name:"影片048",uRl:"https://xxx48.m3u8"},
+{name:"影片049",uRl:"https://xxx49.m3u8"},
+{name:"影片050",uRl:"https://xxx50.m3u8"},
+{name:"影片051",uRl:"https://xxx51.m3u8"},
+{name:"影片052",uRl:"https://xxx52.m3u8"},
+{name:"影片053",uRl:"https://xxx53.m3u8"},
+{name:"影片054",uRl:"https://xxx54.m3u8"},
+{name:"影片055",uRl:"https://xxx55.m3u8"},
+{name:"影片056",uRl:"https://xxx56.m3u8"},
+{name:"影片057",uRl:"https://xxx57.m3u8"},
+{name:"影片058",uRl:"https://xxx58.m3u8"},
+{name:"影片059",uRl:"https://xxx59.m3u8"},
+{name:"影片060",uRl:"https://xxx60.m3u8"},
+{name:"影片061",uRl:"https://xxx61.m3u8"},
+{name:"影片062",uRl:"https://xxx62.m3u8"},
+{name:"影片063",uRl:"https://xxx63.m3u8"},
+{name:"影片064",uRl:"https://xxx64.m3u8"},
+{name:"影片065",uRl:"https://xxx65.m3u8"},
+{name:"影片066",uRl:"https://xxx66.m3u8"},
+{name:"影片067",uRl:"https://xxx67.m3u8"},
+{name:"影片068",uRl:"https://xxx68.m3u8"},
+{name:"影片069",uRl:"https://xxx69.m3u8"},
+{name:"影片070",uRl:"https://xxx70.m3u8"},
+{name:"影片071",uRl:"https://xxx71.m3u8"},
+{name:"影片072",uRl:"https://xxx72.m3u8"},
+{name:"影片073",uRl:"https://xxx73.m3u8"},
+{name:"影片074",uRl:"https://xxx74.m3u8"},
+{name:"影片075",uRl:"https://xxx75.m3u8"},
+{name:"影片076",uRl:"https://xxx76.m3u8"},
+{name:"影片077",uRl:"https://xxx77.m3u8"},
+{name:"影片078",uRl:"https://xxx78.m3u8"},
+{name:"影片079",uRl:"https://xxx79.m3u8"},
+{name:"影片080",uRl:"https://xxx80.m3u8"},
+{name:"影片081",uRl:"https://xxx81.m3u8"},
+{name:"影片082",uRl:"https://xxx82.m3u8"},
+{name:"影片083",uRl:"https://xxx83.m3u8"},
+{name:"影片084",uRl:"https://xxx84.m3u8"},
+{name:"影片085",uRl:"https://xxx85.m3u8"},
+{name:"影片086",uRl:"https://xxx86.m3u8"},
+{name:"影片087",uRl:"https://xxx87.m3u8"},
+{name:"影片088",uRl:"https://xxx88.m3u8"},
+{name:"影片089",uRl:"https://xxx89.m3u8"},
+{name:"影片090",uRl:"https://xxx90.m3u8"},
+{name:"影片091",uRl:"https://xxx91.m3u8"},
+{name:"影片092",uRl:"https://xxx92.m3u8"},
+{name:"影片093",uRl:"https://xxx93.m3u8"},
+{name:"影片094",uRl:"https://xxx94.m3u8"},
+{name:"影片095",uRl:"https://xxx95.m3u8"},
+{name:"影片096",uRl:"https://xxx96.m3u8"},
+{name:"影片097",uRl:"https://xxx97.m3u8"},
+{name:"影片098",uRl:"https://xxx98.m3u8"},
+{name:"影片099",uRl:"https://xxx99.m3u8"},
+{name:"影片100",uRl:"https://xxx100.m3u8"}
+];
+
+const player = document.getElementById('video-player');
+const playerBox = document.getElementById('playerBox');
+const listBox = document.getElementById('listBox');
+const emptyTip = document.getElementById('emptyTip');
+const searchInput = document.querySelector('.search-input');
+
+//唤起1DM/IDM Plus下载
+function startDownload(url,name){
+    window.location.href = `idmplus://download?url=${encodeURIComponent(url)}&name=${encodeURIComponent(name)}`;
+}
+
+//保存播放历史
+function saveHistory(item){
+    const index = playHistory.findIndex(v=>v.url===item.url);
+    if(index>-1) playHistory.splice(index,1);
+    playHistory.unshift(item);
+    if(playHistory.length>20) playHistory.length=20;
+    localStorage.setItem('playHistory',JSON.stringify(playHistory));
+}
+
+//切换收藏状态
+function toggleStar(item){
+    const index = starList.findIndex(v=>v.url===item.url);
+    if(index>-1){
+        starList.splice(index,1);
+    }else{
+        starList.push(item);
+    }
+    localStorage.setItem('starList',JSON.stringify(starList));
+    renderList();
+}
+
+//初始化HLS播放器
+function initPlayer(m3u8Url){
+    if(hls){hls.destroy();hls=null;}
+    if(Hls && Hls.isSupported()){
+        hls = new Hls({
+            startLevel:-1,maxBufferLength:25,enableWorker:true,lowLatencyMode:true
+        });
+        hls.loadSource(m3u8Url);
+        hls.attachMedia(player);
+        hls.on(Hls.Events.MANIFEST_PARSED,()=>player.play().catch(()=>{}));
+        hls.on(Hls.Events.ERROR,(e,data)=>{
+            if(data.fatal) hls.loadSource(m3u8Url);
+        });
+    }else{
+        player.src = m3u8Url;
+        player.load();
+        player.play().catch(()=>{});
+    }
+}
+
+//渲染影片列表
+function renderList(){
+    listBox.innerHTML = '';
+    let filterData = [];
+    const keyword = searchInput.value.trim().toLowerCase();
+
+    //区分标签数据
+    if(currentTab === 'all') filterData = videoData;
+    if(currentTab === 'star') filterData = starList;
+    if(currentTab === 'history') filterData = playHistory;
+
+    //搜索筛选
+    filterData = filterData.filter(item=>item.name.toLowerCase().includes(keyword));
+
+    if(filterData.length === 0){
+        emptyTip.style.display = 'block';
+        return;
+    }
+    emptyTip.style.display = 'none';
+
+    filterData.forEach(item=>{
+        const isStar = starList.some(v=>v.url === item.url);
+        const realUrl = item.url || item.uRl;
+
+        const card = document.createElement('div');
+        card.className = 'video-card';
+
+        const starIcon = document.createElement('div');
+        starIcon.className = 'star-icon';
+        starIcon.innerText = isStar ? '★' : '☆';
+        starIcon.onclick = (e)=>{
+            e.stopPropagation();
+            toggleStar(item);
+        };
+
+        const nameText = document.createElement('div');
+        nameText.className = 'card-name';
+        nameText.innerText = item.name;
+
+        //长按菜单
+        const menu = document.createElement('div');
+        menu.className = 'operate-menu';
+        const copyOption = document.createElement('div');
+        copyOption.className = 'menu-option';
+        copyOption.innerText = '复制链接';
+        const downOption = document.createElement('div');
+        downOption.className = 'menu-option';
+        downOption.innerText = 'IDM下载';
+        menu.appendChild(copyOption);
+        menu.appendChild(downOption);
+        card.appendChild(menu);
+
+        card.appendChild(starIcon);
+        card.appendChild(nameText);
+
+        //单击卡片播放视频
+        card.onclick = ()=>{
+            menu.style.display = 'none';
+            playerBox.style.display = 'block';
+            initPlayer(realUrl);
+            saveHistory(item);
+            //页面滚动到播放器位置
+            playerBox.scrollIntoView({behavior:'smooth',block:'start'});
+        };
+
+        //长按弹出菜单
+        let pressTimer = null;
+        card.addEventListener('touchstart',()=>{
+            pressTimer = setTimeout(()=>{
+                menu.style.display = 'block';
+            },600);
+        });
+        card.addEventListener('touchend',()=>clearTimeout(pressTimer));
+        card.addEventListener('touchcancel',()=>clearTimeout(pressTimer));
+
+        //点击页面任意位置关闭菜单
+        document.addEventListener('touchstart',(e)=>{
+            if(!card.contains(e.target)) menu.style.display = 'none';
+        });
+
+        //复制链接
+        copyOption.onclick = (e)=>{
+            e.stopPropagation();
+            menu.style.display = 'none';
+            navigator.clipboard.writeText(realUrl).then(()=>alert('链接已复制到剪贴板'));
+        };
+
+        //IDM下载
+        downOption.onclick = (e)=>{
+            e.stopPropagation();
+            menu.style.display = 'none';
+            startDownload(realUrl,item.name);
+        };
+
+        listBox.appendChild(card);
+    });
+}
+
+//标签切换事件
+document.querySelectorAll('.tab-item').forEach(tab=>{
+    tab.addEventListener('click',()=>{
+        document.querySelectorAll('.tab-item').forEach(t=>t.classList.remove('active'));
+        tab.classList.add('active');
+        currentTab = tab.dataset.tab;
+        renderList();
+    });
+});
+
+//搜索实时筛选
+searchInput.addEventListener('input',renderList);
+
+//页面初始化加载列表
+renderList();
+</script>
+</body>
+</html>
